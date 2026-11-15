@@ -88,6 +88,7 @@ fun SettingsScreen(
     var pendingPermission by remember { mutableStateOf<String?>(null) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showTapTapLogin by remember { mutableStateOf(false) }
+    var showTapTapWebLogin by remember { mutableStateOf(false) }
 
     val smsGranted = remember(grantedTick) { Permissions.hasSms(context) }
     val callGranted = remember(grantedTick) { Permissions.hasCallLog(context) }
@@ -158,7 +159,7 @@ fun SettingsScreen(
                     if (tapTapSession == null) "未登录（下载走备用源）" else "已登录（优先官方直链）"
                 )
                 Text(
-                    text = "账号仅以加密 Cookie 保存在本机，登录态会持久保留并在应用重启/下载前自动同步刷新，用于从 TapTap 官方 CDN 获取安装包；不会上传到任何服务器。",
+                    text = "登录页由应用自绘，直接调用 TapTap 官方接口，验证成功后自动保存登录态；仅未注册手机号或验证异常时才需要网页登录兜底。Cookie 加密保存在本机，用于从官方 CDN 获取安装包，不会上传到任何服务器。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -278,7 +279,7 @@ fun SettingsScreen(
         item {
             SectionCard(title = "关于") {
                 KeyValueRow("应用名称", "星简助手")
-                KeyValueRow("版本", "1.0.3")
+                KeyValueRow("版本", "1.0.4")
                 KeyValueRow("架构", "MVVM + Clean Architecture")
                 KeyValueRow("最低系统版本", "Android 11 (API 30)")
             }
@@ -306,15 +307,29 @@ fun SettingsScreen(
     }
 
     if (showTapTapLogin) {
-        TapTapLoginDialog(
+        TapTapNativeLoginDialog(
             onDismiss = { showTapTapLogin = false },
+            onLoggedIn = { cookie ->
+                vm.saveTapTapCookie(cookie)
+                showTapTapLogin = false
+            },
+            onUseWebLogin = {
+                showTapTapLogin = false
+                showTapTapWebLogin = true
+            }
+        )
+    }
+
+    if (showTapTapWebLogin) {
+        TapTapWebLoginDialog(
+            onDismiss = { showTapTapWebLogin = false },
             onSaveFromWebView = {
                 vm.saveTapTapCookieFromWebView()
-                showTapTapLogin = false
+                showTapTapWebLogin = false
             },
             onSaveCookie = { cookie ->
                 vm.saveTapTapCookie(cookie)
-                showTapTapLogin = false
+                showTapTapWebLogin = false
             }
         )
     }

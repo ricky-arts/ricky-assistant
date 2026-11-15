@@ -36,12 +36,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
 /**
- * 应用内 TapTap 登录页：WebView 完成登录后读取 Cookie，
- * 同时保留手动粘贴 Cookie 的兜底入口。
+ * 网页登录兜底入口：WebView 完成登录后读取 Cookie，
+ * 同时保留手动粘贴 Cookie 的入口。
+ * 正常登录优先使用自绘的 [TapTapNativeLoginDialog]（直接调用官方接口）。
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun TapTapLoginDialog(
+fun TapTapWebLoginDialog(
     onDismiss: () -> Unit,
     onSaveFromWebView: () -> Unit,
     onSaveCookie: (String) -> Unit
