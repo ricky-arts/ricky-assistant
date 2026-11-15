@@ -91,10 +91,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             _downloading.value = true
             _progress.value = 0f
             _message.value = "正在解析安装包地址…"
-            val link = runCatching { repository.resolveDownload(game.packageName) }.getOrNull()
+            val link = runCatching { repository.resolveDownload(game) }.getOrNull()
             if (link == null) {
                 _downloading.value = false
-                _message.value = "该游戏暂未找到可直链安装的包，换个榜单或稍后再试"
+                _message.value = if (repository.hasTapTapAccount()) {
+                    "官方直链与备用源均不可用，请稍后再试"
+                } else {
+                    "未找到可直链安装的包，可在设置中登录 TapTap 账号后重试"
+                }
                 return@launch
             }
             _message.value = "正在下载 ${game.title}…"

@@ -13,22 +13,24 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-/** 免登录安装包直链 */
+/** 安装包直链；headers 用于携带 TapTap 登录态 */
 data class DownloadLink(
     val url: String,
     /** xapk 分包，需要拆出 base + split 后多 APK 安装 */
-    val isBundle: Boolean
+    val isBundle: Boolean,
+    val headers: Map<String, String> = emptyMap()
 )
 
 /**
  * 游戏数据仓库。
  * 榜单与详情来自 TapTap 公开 webapi；
- * 安装包改由 APKPure 解析免鉴权直链，并在应用内下载、安装
- *（TapTap 官方 CDN 需要登录态，请求会返回 401）。
+ * 安装包优先使用用户自配置 TapTap 账号的登录态，从官方 CDN 直链下载，
+ * 若未登录或直链不可用，回退到 APKPure 免鉴权直链。
  */
 class GameRepository(
     private val api: TapTapApi,
-    private val context: Context
+    private val context: Context,
+    private val account: TapTapAccountRepository
 ) {
 
     private val client = OkHttpClient.Builder()
@@ -48,25 +50,78 @@ class GameRepository(
         api.detail(appId)
     }
 
-    /** 解析免鉴权直链：APKPure 的 302 会跳到真实 CDN，无需任何 Cookie/Token */
-    suspend fun resolveDownload(packageName: String): DownloadLink? =
+    fun hasTapTapAccount(): Boolean = account.session.value != null
+
+    /**
+     * 解析安装包地址：
+     * 1) 已配置 TapTap 账号时，带 Cookie 探测官方 CDN 直链；
+     * 2) 否则或探测失败时，使用 APKPure 免鉴权直链。
+     */
+    suspend fun resolveDownload(game: GameDetail): DownloadLink? =
         withContext(Dispatchers.IO) {
-            if (packageName.isBlank()) return@withContext null
-            runCatching {
-                val request = Request.Builder()
-                    .url("https://d.apkpure.com/b/APK/$packageName?version=latest")
-                    .header("User-Agent", MOBILE_UA)
-                    .header("Accept", "*/*")
-                    .build()
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use null
-                    val finalUrl = response.request.url.toString()
-                    if (finalUrl.isBlank()) return@use null
-                    val isBundle = finalUrl.contains(".xapk", ignoreCase = true)
-                    DownloadLink(finalUrl, isBundle)
-                }
-            }.getOrNull()
+            if (game.packageName.isBlank()) return@withContext null
+            resolveTapTap(game) ?: resolveApkPure(game.packageName)
         }
+
+    private fun resolveTapTap(game: GameDetail): DownloadLink? {
+        val cookie = account.session.value?.cookie ?: return null
+        val apkName = game.apk?.name.orEmpty()
+        val candidates = buildList {
+            if (apkName.isNotBlank()) add(cdnUrl(game.appId, apkName))
+            add(cdnUrl(game.appId, "${game.packageName}.apk"))
+        }
+        for (url in candidates.distinct()) {
+            val ok = runCatching { probeTapTap(url, game, cookie) }.getOrDefault(false)
+            if (ok) {
+                return DownloadLink(url, isBundle = false, headers = tapTapHeaders(game, cookie))
+            }
+        }
+        return null
+    }
+
+    private fun cdnUrl(appId: String, fileName: String) =
+        "https://d.taptap.cn/layou/latest/$appId/$fileName"
+
+    /** 用 Range 请求只取首段字节，避免为校验直链而整包下载 */
+    private fun probeTapTap(url: String, game: GameDetail, cookie: String): Boolean {
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", MOBILE_UA)
+            .header("Referer", "https://www.taptap.cn/app/${game.appId}")
+            .header("Cookie", cookie)
+            .header("Range", "bytes=0-2047")
+            .header("Accept", "*/*")
+            .build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use false
+            val type = response.header("Content-Type").orEmpty().lowercase()
+            if (type.contains("json") || type.contains("html")) return@use false
+            val body = response.body ?: return@use false
+            val buffer = okio.Buffer()
+            body.source().read(buffer, 1024L) > 0L
+        }
+    }
+
+    private fun tapTapHeaders(game: GameDetail, cookie: String): Map<String, String> = mapOf(
+        "Cookie" to cookie,
+        "Referer" to "https://www.taptap.cn/app/${game.appId}",
+        "User-Agent" to MOBILE_UA
+    )
+
+    /** APKPure 的 302 会跳到真实 CDN，无需任何 Cookie/Token */
+    private fun resolveApkPure(packageName: String): DownloadLink? = runCatching {
+        val request = Request.Builder()
+            .url("https://d.apkpure.com/b/APK/$packageName?version=latest")
+            .header("User-Agent", MOBILE_UA)
+            .header("Accept", "*/*")
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@use null
+            val finalUrl = response.request.url.toString()
+            if (finalUrl.isBlank()) return@use null
+            DownloadLink(finalUrl, finalUrl.contains(".xapk", ignoreCase = true))
+        }
+    }.getOrNull()
 
     /** 应用内下载并调起安装（单 APK 或 xapk 分包） */
     suspend fun downloadAndInstall(
@@ -91,12 +146,12 @@ class GameRepository(
         dir.listFiles()?.forEach { it.delete() }
         val target = File(dir, if (link.isBundle) "game.xapk" else "game.apk")
 
-        val request = Request.Builder()
+        val builder = Request.Builder()
             .url(link.url)
             .header("User-Agent", MOBILE_UA)
             .header("Accept", "*/*")
-            .build()
-        val call = client.newCall(request)
+        link.headers.forEach { (name, value) -> builder.header(name, value) }
+        val call = client.newCall(builder.build())
         runningCall = call
         try {
             call.execute().use { response ->

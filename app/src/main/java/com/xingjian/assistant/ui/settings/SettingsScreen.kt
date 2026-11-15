@@ -33,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -81,10 +82,12 @@ fun SettingsScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val backgroundVersion by vm.backgroundVersion.collectAsStateWithLifecycle()
     val autoLedgerEnabled by vm.autoLedgerEnabled.collectAsStateWithLifecycle()
+    val tapTapSession by vm.tapTapSession.collectAsStateWithLifecycle()
 
     var grantedTick by remember { mutableIntStateOf(0) }
     var pendingPermission by remember { mutableStateOf<String?>(null) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showTapTapLogin by remember { mutableStateOf(false) }
 
     val smsGranted = remember(grantedTick) { Permissions.hasSms(context) }
     val callGranted = remember(grantedTick) { Permissions.hasCallLog(context) }
@@ -129,6 +132,34 @@ fun SettingsScreen(
                     }
                 }
             ) {}
+        }
+
+        item {
+            SectionCard(
+                title = "TapTap 账号",
+                trailing = {
+                    Row {
+                        TextButton(onClick = { showTapTapLogin = true }) {
+                            Text(if (tapTapSession == null) "登录" else "重新登录")
+                        }
+                        if (tapTapSession != null) {
+                            TextButton(onClick = { vm.clearTapTapAccount() }) {
+                                Text("退出")
+                            }
+                        }
+                    }
+                }
+            ) {
+                KeyValueRow(
+                    "登录态",
+                    if (tapTapSession == null) "未登录（下载走备用源）" else "已登录（优先官方直链）"
+                )
+                Text(
+                    text = "账号仅以加密 Cookie 保存在本机，用于从 TapTap 官方 CDN 获取安装包；不会上传到任何服务器。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
         item {
@@ -244,7 +275,7 @@ fun SettingsScreen(
         item {
             SectionCard(title = "关于") {
                 KeyValueRow("应用名称", "星简助手")
-                KeyValueRow("版本", "1.0.0")
+                KeyValueRow("版本", "1.0.2")
                 KeyValueRow("架构", "MVVM + Clean Architecture")
                 KeyValueRow("最低系统版本", "Android 11 (API 30)")
             }
@@ -268,6 +299,20 @@ fun SettingsScreen(
                 pendingPermission = null
             },
             onDismiss = { pendingPermission = null }
+        )
+    }
+
+    if (showTapTapLogin) {
+        TapTapLoginDialog(
+            onDismiss = { showTapTapLogin = false },
+            onSaveFromWebView = {
+                vm.saveTapTapCookieFromWebView()
+                showTapTapLogin = false
+            },
+            onSaveCookie = { cookie ->
+                vm.saveTapTapCookie(cookie)
+                showTapTapLogin = false
+            }
         )
     }
 

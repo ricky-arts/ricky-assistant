@@ -19,6 +19,7 @@ import com.xingjian.assistant.data.repository.MailRepository
 import com.xingjian.assistant.data.repository.ProxyRepository
 import com.xingjian.assistant.data.repository.SettingsRepository
 import com.xingjian.assistant.data.repository.SmsRepository
+import com.xingjian.assistant.data.repository.TapTapAccountRepository
 import com.xingjian.assistant.data.repository.clearAllLocalData
 import com.xingjian.assistant.data.system.CallLogSystemReader
 import com.xingjian.assistant.data.system.SmsSystemReader
@@ -71,9 +72,14 @@ class AppContainer(private val appContext: Context) {
         AiRepository(database.aiDao(), secureStore, proxyRepository, AiClient(HttpClientFactory()))
     }
 
+    /** TapTap 账号登录态（加密保存的 Cookie） */
+    val tapTapAccount: TapTapAccountRepository by lazy {
+        TapTapAccountRepository(secureStore)
+    }
+
     /** 游戏榜单/详情与安装包下载 */
     val gameRepository: GameRepository by lazy {
-        GameRepository(TapTapApi(), appContext)
+        GameRepository(TapTapApi(), appContext, tapTapAccount)
     }
 
     /** 清空全部本地用户数据（保留内置分类与厂商模板） */

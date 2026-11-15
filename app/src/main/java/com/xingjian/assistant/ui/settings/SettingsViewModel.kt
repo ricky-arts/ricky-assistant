@@ -7,6 +7,7 @@ import com.xingjian.assistant.data.repository.LedgerRepository
 import com.xingjian.assistant.data.repository.MailRepository
 import com.xingjian.assistant.data.repository.SettingsRepository
 import com.xingjian.assistant.data.repository.SmsRepository
+import com.xingjian.assistant.data.repository.TapTapSession
 import com.xingjian.assistant.di.AppContainer
 import com.xingjian.assistant.domain.model.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +39,9 @@ class SettingsViewModel(
 
     val autoLedgerEnabled: StateFlow<Boolean> = settings.autoLedgerEnabled
 
+    /** TapTap 账号登录态（用于游戏模块官方直链下载） */
+    val tapTapSession: StateFlow<TapTapSession?> = container.tapTapAccount.session
+
     val counts: StateFlow<LocalDataCounts> = combine(
         smsRepository.count,
         callRepository.count,
@@ -67,6 +71,30 @@ class SettingsViewModel(
         message.value = "已恢复纯色背景"
     }
 
+    /** 从应用内 WebView 读取已登录的 TapTap Cookie 并加密保存 */
+    fun saveTapTapCookieFromWebView() {
+        val cookie = container.tapTapAccount.captureCookieFromWebView()
+        if (container.tapTapAccount.save(cookie)) {
+            message.value = "TapTap 账号已保存，下载时将优先使用官方直链"
+        } else {
+            message.value = "未检测到 TapTap 登录态，请先在网页中完成登录"
+        }
+    }
+
+    /** 手动粘贴 Cookie（网页登录异常时的兜底方式） */
+    fun saveTapTapCookie(raw: String) {
+        if (container.tapTapAccount.save(raw)) {
+            message.value = "TapTap 账号已保存，下载时将优先使用官方直链"
+        } else {
+            message.value = "Cookie 无效，请复制完整的 Cookie 后重试"
+        }
+    }
+
+    fun clearTapTapAccount() {
+        container.tapTapAccount.clear()
+        message.value = "已退出 TapTap 账号"
+    }
+
     fun clearMessage() {
         message.value = null
     }
@@ -77,7 +105,10 @@ class SettingsViewModel(
         viewModelScope.launch {
             clearing.value = true
             runCatching { container.clearAllData() }
-                .onSuccess { message.value = "本地数据已全部清空" }
+                .onSuccess {
+                    container.tapTapAccount.refresh()
+                    message.value = "本地数据已全部清空"
+                }
                 .onFailure { message.value = "清空失败：${it.message ?: "未知错误"}" }
             clearing.value = false
         }
