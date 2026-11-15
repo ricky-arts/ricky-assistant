@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">星简助手</string>
+    <string name="app_slogan">本地优先 · 隐私优先</string>
+
+    <string name="nav_home">首页汇总</string>
+    <string name="nav_comms">通讯记录</string>
+    <string name="nav_mail">邮箱管理</string>
+    <string name="nav_ledger">记账中心</string>
+    <string name="nav_ai">AI 助手</string>
+    <string name="nav_settings">设置</string>
+
+    <string name="permission_sms_title">读取短信权限</string>
+    <string name="permission_sms_desc">用于在本机提取并分类短信（垃圾 / 通知 / 重要）。数据仅保存在本地数据库，不会自动上传。</string>
+    <string name="permission_call_title">读取通话记录权限</string>
+    <string name="permission_call_desc">用于在本机提取并分类通话记录（骚扰 / 快递 / 官方 / 私人）。数据仅保存在本地数据库，不会自动上传。</string>
+    <string name="permission_grant">去授权</string>
+    <string name="permission_go_settings">前往系统设置</string>
+    <string name="permission_denied">权限已被拒绝，可在系统设置中手动开启</string>
+
+    <string name="common_confirm">确定</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_delete">删除</string>
+    <string name="common_save">保存</string>
+    <string name="common_search">搜索</string>
+    <string name="common_clear">清空</string>
+    <string name="common_empty">暂无数据</string>
+
+    <string name="auto_ledger_service_label">自动记账识别</string>
+    <string name="accessibility_service_description">仅用于识别微信、支付宝、抖音的支付成功结果页金额，自动生成记账记录。不读取聊天内容，数据仅保存在本机。</string>
+</resources>

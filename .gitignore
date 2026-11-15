@@ -1,0 +1,41 @@
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+captures/
+.navigation/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# 本机配置（包含 SDK 路径，禁止入库）
+local.properties
+
+# 签名与密钥
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# 构建产物
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+output.json
+release/
+
+# 日志与临时文件
+*.log
+*.hprof
+*.tmp
+.DS_Store
+Thumbs.db
