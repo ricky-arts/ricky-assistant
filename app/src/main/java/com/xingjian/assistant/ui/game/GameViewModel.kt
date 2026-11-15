@@ -87,6 +87,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     fun download() {
         val game = _detail.value ?: return
         if (_downloading.value) return
+        repository.refreshTapTapSession()
         viewModelScope.launch {
             _downloading.value = true
             _progress.value = 0f

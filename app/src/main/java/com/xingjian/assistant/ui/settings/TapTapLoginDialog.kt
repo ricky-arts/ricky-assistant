@@ -76,7 +76,7 @@ fun TapTapLoginDialog(
                     }
                 }
                 Text(
-                    text = "在下方网页完成登录后，点右上角“保存登录态”；若网页登录异常，可直接粘贴 Cookie 保存。",
+                    text = "在网页中用手机号验证码（或密码）完成登录后，点右上角“保存登录态”。登录态会持久保存在本机，重启应用无需重复登录；若网页登录异常，可直接粘贴 Cookie 保存。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)

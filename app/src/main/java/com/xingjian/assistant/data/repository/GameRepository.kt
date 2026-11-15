@@ -52,6 +52,9 @@ class GameRepository(
 
     fun hasTapTapAccount(): Boolean = account.session.value != null
 
+    /** 下载前同步 WebView 中轮换后的登录态（需在主线程调用） */
+    fun refreshTapTapSession() = account.refreshFromWebView()
+
     /**
      * 解析安装包地址：
      * 1) 已配置 TapTap 账号时，带 Cookie 探测官方 CDN 直链；

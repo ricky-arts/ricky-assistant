@@ -95,6 +95,11 @@ class SettingsViewModel(
         message.value = "已退出 TapTap 账号"
     }
 
+    /** 进入设置页时同步 WebView 中轮换后的登录态 */
+    fun refreshTapTapSession() {
+        container.tapTapAccount.refreshFromWebView()
+    }
+
     fun clearMessage() {
         message.value = null
     }

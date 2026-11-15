@@ -98,7 +98,10 @@ fun SettingsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) grantedTick++
+            if (event == Lifecycle.Event.ON_RESUME) {
+                grantedTick++
+                vm.refreshTapTapSession()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -155,7 +158,7 @@ fun SettingsScreen(
                     if (tapTapSession == null) "未登录（下载走备用源）" else "已登录（优先官方直链）"
                 )
                 Text(
-                    text = "账号仅以加密 Cookie 保存在本机，用于从 TapTap 官方 CDN 获取安装包；不会上传到任何服务器。",
+                    text = "账号仅以加密 Cookie 保存在本机，登录态会持久保留并在应用重启/下载前自动同步刷新，用于从 TapTap 官方 CDN 获取安装包；不会上传到任何服务器。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -275,7 +278,7 @@ fun SettingsScreen(
         item {
             SectionCard(title = "关于") {
                 KeyValueRow("应用名称", "星简助手")
-                KeyValueRow("版本", "1.0.2")
+                KeyValueRow("版本", "1.0.3")
                 KeyValueRow("架构", "MVVM + Clean Architecture")
                 KeyValueRow("最低系统版本", "Android 11 (API 30)")
             }
