@@ -37,6 +37,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     private val _downloading = MutableStateFlow(false)
     val downloading: StateFlow<Boolean> = _downloading.asStateFlow()
 
+    /** 0f~1f 为下载进度；下载前解析直链阶段固定为 0 */
+    private val _progress = MutableStateFlow(0f)
+    val progress: StateFlow<Float> = _progress.asStateFlow()
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -85,32 +89,36 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (_downloading.value) return
         viewModelScope.launch {
             _downloading.value = true
-            _message.value = "正在解析下载地址…"
-            val resolved = runCatching { repository.resolveDownload(game.packageName) }.getOrNull()
-            when {
-                resolved == null -> {
-                    _message.value = "未获取到可直接安装的直链，已打开 TapTap 页面"
-                    repository.openTapTapPage(game.appId)
+            _progress.value = 0f
+            _message.value = "正在解析安装包地址…"
+            val link = runCatching { repository.resolveDownload(game.packageName) }.getOrNull()
+            if (link == null) {
+                _downloading.value = false
+                _message.value = "该游戏暂未找到可直链安装的包，换个榜单或稍后再试"
+                return@launch
+            }
+            _message.value = "正在下载 ${game.title}…"
+            repository.downloadAndInstall(link, game.packageName) { percent ->
+                _progress.value = percent.coerceIn(0f, 1f)
+            }
+                .onSuccess {
+                    _message.value = "下载完成，请按系统安装页提示确认安装"
                 }
-                resolved.second -> {
-                    _message.value = "该游戏为分包安装包（xapk），已打开 TapTap 页面继续下载"
-                    repository.openTapTapPage(game.appId)
-                }
-                else -> {
-                    val queued = repository.enqueueApkDownload(
-                        resolved.first,
-                        game.title,
-                        game.packageName
-                    )
-                    _message.value = if (queued) {
-                        "已开始下载，完成后在通知栏点击安装"
+                .onFailure { error ->
+                    _message.value = if (error is SecurityException) {
+                        "请先在系统设置中允许本应用安装未知应用"
                     } else {
-                        "下载任务创建失败"
+                        "下载失败：${error.message ?: "网络异常"}"
                     }
                 }
-            }
             _downloading.value = false
         }
+    }
+
+    fun cancelDownload() {
+        repository.cancelDownload()
+        _downloading.value = false
+        _message.value = "已取消下载"
     }
 
     fun clearMessage() {

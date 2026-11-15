@@ -62,6 +62,15 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- 游戏模块：接收 PackageInstaller 安装状态并拉起系统确认页 -->
+        <receiver
+            android:name=".data.install.InstallStatusReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.xingjian.assistant.INSTALL_STATUS" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

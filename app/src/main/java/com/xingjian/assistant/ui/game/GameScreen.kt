@@ -36,8 +36,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,12 +77,13 @@ fun GameScreen(container: AppContainer, modifier: Modifier = Modifier) {
     val detail by vm.detail.collectAsStateWithLifecycle()
     val detailLoading by vm.detailLoading.collectAsStateWithLifecycle()
     val downloading by vm.downloading.collectAsStateWithLifecycle()
+    val progress by vm.progress.collectAsStateWithLifecycle()
 
     val current = detail
     when {
         current != null -> {
             BackHandler { vm.closeDetail() }
-            GameDetailPane(vm, current, downloading, modifier)
+            GameDetailPane(vm, current, downloading, progress, modifier)
         }
         detailLoading -> {
             BackHandler { vm.closeDetail() }
@@ -221,6 +224,7 @@ private fun GameDetailPane(
     vm: GameViewModel,
     detail: GameDetail,
     downloading: Boolean,
+    progress: Float,
     modifier: Modifier
 ) {
     val message by vm.message.collectAsStateWithLifecycle()
@@ -347,7 +351,32 @@ private fun GameDetailPane(
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (downloading) "准备中…" else "下载安装")
+                    Text(
+                        if (downloading) {
+                            "下载中 ${(progress * 100).toInt()}%"
+                        } else {
+                            "下载安装"
+                        }
+                    )
+                }
+                if (downloading) {
+                    Spacer(Modifier.height(10.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "应用内下载，完成后自动调起系统安装",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(onClick = { vm.cancelDownload() }) { Text("取消") }
+                    }
                 }
             }
         }

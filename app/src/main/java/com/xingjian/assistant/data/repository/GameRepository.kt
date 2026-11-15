@@ -1,10 +1,7 @@
 package com.xingjian.assistant.data.repository
 
-import android.app.DownloadManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.os.Environment
+import com.xingjian.assistant.data.install.ApkInstaller
 import com.xingjian.assistant.data.remote.TapTapApi
 import com.xingjian.assistant.domain.model.GameDetail
 import com.xingjian.assistant.domain.model.GameSummary
@@ -12,23 +9,36 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.File
+import java.io.IOException
 import java.util.concurrent.TimeUnit
+
+/** 免登录安装包直链 */
+data class DownloadLink(
+    val url: String,
+    /** xapk 分包，需要拆出 base + split 后多 APK 安装 */
+    val isBundle: Boolean
+)
 
 /**
  * 游戏数据仓库。
  * 榜单与详情来自 TapTap 公开 webapi；
- * 安装包直链由 APKPure 解析（TapTap 官方直链需要登录鉴权，无法直接拉取）。
+ * 安装包改由 APKPure 解析免鉴权直链，并在应用内下载、安装
+ *（TapTap 官方 CDN 需要登录态，请求会返回 401）。
  */
 class GameRepository(
     private val api: TapTapApi,
     private val context: Context
 ) {
 
-    private val downloadClient = OkHttpClient.Builder()
+    private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
+
+    @Volatile
+    private var runningCall: okhttp3.Call? = null
 
     suspend fun ranking(typeName: String): List<GameSummary> = withContext(Dispatchers.IO) {
         api.ranking(typeName)
@@ -38,11 +48,8 @@ class GameRepository(
         api.detail(appId)
     }
 
-    /**
-     * 解析安装包直链。
-     * @return 直链地址 + 是否为分包（xapk，无法用系统安装器直接安装）
-     */
-    suspend fun resolveDownload(packageName: String): Pair<String, Boolean>? =
+    /** 解析免鉴权直链：APKPure 的 302 会跳到真实 CDN，无需任何 Cookie/Token */
+    suspend fun resolveDownload(packageName: String): DownloadLink? =
         withContext(Dispatchers.IO) {
             if (packageName.isBlank()) return@withContext null
             runCatching {
@@ -51,42 +58,75 @@ class GameRepository(
                     .header("User-Agent", MOBILE_UA)
                     .header("Accept", "*/*")
                     .build()
-                downloadClient.newCall(request).execute().use { response ->
+                client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) return@use null
                     val finalUrl = response.request.url.toString()
                     if (finalUrl.isBlank()) return@use null
-                    val isBundle = finalUrl.contains("/XAPK/", ignoreCase = true) ||
-                        finalUrl.contains(".xapk", ignoreCase = true)
-                    finalUrl to isBundle
+                    val isBundle = finalUrl.contains(".xapk", ignoreCase = true)
+                    DownloadLink(finalUrl, isBundle)
                 }
             }.getOrNull()
         }
 
-    /** 交给系统下载器下载，完成后通知栏可直接点击安装 */
-    fun enqueueApkDownload(url: String, title: String, packageName: String): Boolean = runCatching {
-        val safeName = packageName.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val fileName = "$safeName-${System.currentTimeMillis()}.apk"
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle(title)
-            .setDescription("安装包下载中")
-            .setMimeType("application/vnd.android.package-archive")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(false)
-        val manager = context.getSystemService(DownloadManager::class.java)
-        manager?.enqueue(request)
-        manager != null
-    }.getOrDefault(false)
-
-    /** 打开 TapTap 游戏页作为兜底下载入口 */
-    fun openTapTapPage(appId: String) {
+    /** 应用内下载并调起安装（单 APK 或 xapk 分包） */
+    suspend fun downloadAndInstall(
+        link: DownloadLink,
+        packageName: String,
+        onProgress: (Float) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.taptap.cn/app/$appId"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            val file = download(link, onProgress)
+            if (link.isBundle) {
+                ApkInstaller.installBundle(context, file, packageName)
+            } else {
+                ApkInstaller.install(context, file)
+            }
+            Unit
         }
+    }
+
+    /** 仅下载，返回落盘的安装包 */
+    private fun download(link: DownloadLink, onProgress: (Float) -> Unit): File {
+        val dir = File(context.cacheDir, "game_download").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val target = File(dir, if (link.isBundle) "game.xapk" else "game.apk")
+
+        val request = Request.Builder()
+            .url(link.url)
+            .header("User-Agent", MOBILE_UA)
+            .header("Accept", "*/*")
+            .build()
+        val call = client.newCall(request)
+        runningCall = call
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) throw IOException("下载失败（HTTP ${response.code}）")
+                val body = response.body ?: throw IOException("安装包内容为空")
+                val total = body.contentLength()
+                body.byteStream().use { input ->
+                    target.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var written = 0L
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            written += read
+                            if (total > 0) onProgress(written.toFloat() / total)
+                        }
+                    }
+                }
+            }
+        } finally {
+            runningCall = null
+        }
+        if (target.length() <= 0L) throw IOException("安装包下载不完整")
+        return target
+    }
+
+    /** 取消正在进行的下载 */
+    fun cancelDownload() {
+        runningCall?.cancel()
     }
 
     private companion object {

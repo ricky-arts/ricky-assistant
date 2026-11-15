@@ -50,7 +50,8 @@ $env:JAVA_HOME="<你的 JDK 17 路径>"
 ## 游戏模块说明
 
 - 榜单与详情来自 TapTap 公开 Web API，无需登录。
-- 安装包通过 APKPure 解析直链后用系统 `DownloadManager` 下载；若只提供 `.xapk` 分包或无法解析，则自动降级为打开 TapTap 网页，由用户自行安装。
+- 安装包通过免鉴权的 APKPure 直链在**应用内**下载（带进度），随后由 `PackageInstaller` 拉起系统安装页；TapTap 官方 CDN 需要登录态（会返回 401），因此不使用。
+- 若分发的是 `.xapk` 分包，会自动解压出 base 与 split APK，按多 APK 会话安装；找不到可直链安装的包时仅提示，不会跳转浏览器。
 
 ## 版本与发布
 
