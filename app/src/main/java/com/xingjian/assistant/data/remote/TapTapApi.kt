@@ -61,7 +61,9 @@ class TapTapApi {
         ).optJSONObject("data") ?: throw IOException("游戏详情解析失败")
 
         val summary = summaryOf(data) ?: throw IOException("游戏详情解析失败")
-        val apk = data.optJSONObject("download")?.optJSONObject("apk")?.let { apkOf(it) }
+        val download = data.optJSONObject("download")
+        val apk = download?.optJSONObject("apk")
+            ?.let { apkOf(it, download.opt("apk_id")?.toString().orEmpty()) }
         return GameDetail(
             appId = summary.appId,
             packageName = summary.packageName,
@@ -168,7 +170,8 @@ class TapTapApi {
         return if (single.isNotBlank()) listOf(single) else emptyList()
     }
 
-    private fun apkOf(apk: JSONObject): GameApk = GameApk(
+    private fun apkOf(apk: JSONObject, apkId: String): GameApk = GameApk(
+        apkId = apkId,
         name = apk.optString("name"),
         sizeBytes = apk.optLong("size"),
         versionName = apk.optString("version_name"),

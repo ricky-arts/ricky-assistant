@@ -130,7 +130,8 @@ fun TapTapNativeLoginDialog(
                 Text("TapTap 账号登录", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "使用手机号验证码登录。登录接口成功后会自动保存登录态，下载时优先使用官方 CDN 直链。",
+                    text = "使用手机号验证码登录。登录接口成功后会自动保存登录态并加密存放在本机。" +
+                        "游戏下载使用官方签名直链，不依赖此账号。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -14,6 +14,8 @@ data class GameSummary(
 
 /** 安装包信息 */
 data class GameApk(
+    /** TapTap 安装包内部 ID，用于解析下载直链 */
+    val apkId: String,
     val name: String,
     val sizeBytes: Long,
     val versionName: String,

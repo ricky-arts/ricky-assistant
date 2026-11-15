@@ -124,11 +124,13 @@ class TapTapAuthApi {
 
         val data = json.optJSONObject("data")
         val action = data?.optString("action").orEmpty()
-        // 未注册手机号：验证码校验通过，但还需要设置昵称等资料才会真正登录
-        if (action == "register" || data?.opt("preregister") != null || data?.opt("ticket_token") != null) {
+        // 只有接口明确要求注册（action=register）才判定为未注册；
+        // 其余字段（preregister / ticket_token 等）在已注册登录响应里也可能存在，不能作为判定依据。
+        if (action == "register") {
             return TapTapLoginResult.NeedProfile("该手机号尚未注册 TapTap，需要先设置资料，请改用网页登录完成注册")
         }
 
+        // 以是否真的拿到登录态 Cookie 作为成功标准
         val cookie = cookieHeader()
         if (cookie.isBlank()) {
             return TapTapLoginResult.Failed("登录响应未包含登录态，请重试或改用网页登录")

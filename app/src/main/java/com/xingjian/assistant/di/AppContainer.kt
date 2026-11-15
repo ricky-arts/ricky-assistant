@@ -10,6 +10,7 @@ import com.xingjian.assistant.data.ai.AiClient
 import com.xingjian.assistant.data.local.AppDatabase
 import com.xingjian.assistant.data.mail.ImapMailClient
 import com.xingjian.assistant.data.remote.TapTapApi
+import com.xingjian.assistant.data.remote.TapTapDownloadApi
 import com.xingjian.assistant.data.repository.AiRepository
 import com.xingjian.assistant.data.repository.CallRepository
 import com.xingjian.assistant.data.repository.GameRepository
@@ -79,7 +80,7 @@ class AppContainer(private val appContext: Context) {
 
     /** 游戏榜单/详情与安装包下载 */
     val gameRepository: GameRepository by lazy {
-        GameRepository(TapTapApi(), appContext, tapTapAccount)
+        GameRepository(TapTapApi(), TapTapDownloadApi(), appContext)
     }
 
     /** 清空全部本地用户数据（保留内置分类与厂商模板） */

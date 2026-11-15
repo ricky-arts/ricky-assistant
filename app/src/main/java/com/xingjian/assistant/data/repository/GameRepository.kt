@@ -3,6 +3,7 @@ package com.xingjian.assistant.data.repository
 import android.content.Context
 import com.xingjian.assistant.data.install.ApkInstaller
 import com.xingjian.assistant.data.remote.TapTapApi
+import com.xingjian.assistant.data.remote.TapTapDownloadApi
 import com.xingjian.assistant.domain.model.GameDetail
 import com.xingjian.assistant.domain.model.GameSummary
 import kotlinx.coroutines.Dispatchers
@@ -24,13 +25,13 @@ data class DownloadLink(
 /**
  * 游戏数据仓库。
  * 榜单与详情来自 TapTap 公开 webapi；
- * 安装包优先使用用户自配置 TapTap 账号的登录态，从官方 CDN 直链下载，
- * 若未登录或直链不可用，回退到 APKPure 免鉴权直链。
+ * 安装包直链通过 TapTap 客户端的签名接口解析（无需登录），
+ * 解析失败时回退到 APKPure 免鉴权直链。
  */
 class GameRepository(
     private val api: TapTapApi,
-    private val context: Context,
-    private val account: TapTapAccountRepository
+    private val downloads: TapTapDownloadApi,
+    private val context: Context
 ) {
 
     private val client = OkHttpClient.Builder()
@@ -50,66 +51,25 @@ class GameRepository(
         api.detail(appId)
     }
 
-    fun hasTapTapAccount(): Boolean = account.session.value != null
-
-    /** 下载前同步 WebView 中轮换后的登录态（需在主线程调用） */
-    fun refreshTapTapSession() = account.refreshFromWebView()
-
     /**
      * 解析安装包地址：
-     * 1) 已配置 TapTap 账号时，带 Cookie 探测官方 CDN 直链；
-     * 2) 否则或探测失败时，使用 APKPure 免鉴权直链。
+     * 1) 走 TapTap 客户端签名接口，拿到带时效签名的官方 CDN 直链（免登录、支持断点续传）；
+     * 2) 失败时回退 APKPure 免鉴权直链。
      */
     suspend fun resolveDownload(game: GameDetail): DownloadLink? =
         withContext(Dispatchers.IO) {
-            if (game.packageName.isBlank()) return@withContext null
-            resolveTapTap(game) ?: resolveApkPure(game.packageName)
-        }
-
-    private fun resolveTapTap(game: GameDetail): DownloadLink? {
-        val cookie = account.session.value?.cookie ?: return null
-        val apkName = game.apk?.name.orEmpty()
-        val candidates = buildList {
-            if (apkName.isNotBlank()) add(cdnUrl(game.appId, apkName))
-            add(cdnUrl(game.appId, "${game.packageName}.apk"))
-        }
-        for (url in candidates.distinct()) {
-            val ok = runCatching { probeTapTap(url, game, cookie) }.getOrDefault(false)
-            if (ok) {
-                return DownloadLink(url, isBundle = false, headers = tapTapHeaders(game, cookie))
+            val official = runCatching {
+                downloads.resolve(game.appId, game.apk?.apkId)
+            }.getOrNull()
+            if (official != null) {
+                return@withContext DownloadLink(
+                    official,
+                    isBundle = official.contains(".xapk", ignoreCase = true)
+                )
             }
+            if (game.packageName.isBlank()) return@withContext null
+            resolveApkPure(game.packageName)
         }
-        return null
-    }
-
-    private fun cdnUrl(appId: String, fileName: String) =
-        "https://d.taptap.cn/layou/latest/$appId/$fileName"
-
-    /** 用 Range 请求只取首段字节，避免为校验直链而整包下载 */
-    private fun probeTapTap(url: String, game: GameDetail, cookie: String): Boolean {
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", MOBILE_UA)
-            .header("Referer", "https://www.taptap.cn/app/${game.appId}")
-            .header("Cookie", cookie)
-            .header("Range", "bytes=0-2047")
-            .header("Accept", "*/*")
-            .build()
-        return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@use false
-            val type = response.header("Content-Type").orEmpty().lowercase()
-            if (type.contains("json") || type.contains("html")) return@use false
-            val body = response.body ?: return@use false
-            val buffer = okio.Buffer()
-            body.source().read(buffer, 1024L) > 0L
-        }
-    }
-
-    private fun tapTapHeaders(game: GameDetail, cookie: String): Map<String, String> = mapOf(
-        "Cookie" to cookie,
-        "Referer" to "https://www.taptap.cn/app/${game.appId}",
-        "User-Agent" to MOBILE_UA
-    )
 
     /** APKPure 的 302 会跳到真实 CDN，无需任何 Cookie/Token */
     private fun resolveApkPure(packageName: String): DownloadLink? = runCatching {

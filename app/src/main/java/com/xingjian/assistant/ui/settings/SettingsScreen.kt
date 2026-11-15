@@ -156,10 +156,10 @@ fun SettingsScreen(
             ) {
                 KeyValueRow(
                     "登录态",
-                    if (tapTapSession == null) "未登录（下载走备用源）" else "已登录（优先官方直链）"
+                    if (tapTapSession == null) "未登录（不影响游戏下载）" else "已登录"
                 )
                 Text(
-                    text = "登录页由应用自绘，直接调用 TapTap 官方接口，验证成功后自动保存登录态；仅未注册手机号或验证异常时才需要网页登录兜底。Cookie 加密保存在本机，用于从官方 CDN 获取安装包，不会上传到任何服务器。",
+                    text = "登录页由应用自绘，直接调用 TapTap 官方接口，验证成功后自动保存登录态；仅未注册手机号或验证异常时才需要网页登录兜底。Cookie 加密保存在本机，不会上传到任何服务器。游戏下载使用官方签名直链，不依赖此账号。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -279,7 +279,7 @@ fun SettingsScreen(
         item {
             SectionCard(title = "关于") {
                 KeyValueRow("应用名称", "星简助手")
-                KeyValueRow("版本", "1.0.4")
+                KeyValueRow("版本", "1.0.5")
                 KeyValueRow("架构", "MVVM + Clean Architecture")
                 KeyValueRow("最低系统版本", "Android 11 (API 30)")
             }
